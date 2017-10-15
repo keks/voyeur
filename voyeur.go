@@ -39,6 +39,13 @@ type Observer interface {
 	OnEvent(context.Context, Event)
 }
 
+// ObserverFunc is an observer that calls the function for each event
+type ObserverFunc func(context.Context, Event)
+
+func (o ObserverFunc) OnEvent(ctx context.Context, e Event) {
+	o(ctx, e)
+}
+
 // Observable  emits events
 type Observable interface {
 	Register(context.Context, Observer)
