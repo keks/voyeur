@@ -44,6 +44,22 @@ type Observable interface {
 	Register(context.Context, Observer)
 }
 
+// Filter is bot observer and observant. A generalization of map, filter and reduce.
+type Filter interface {
+	Observable
+	Observer
+}
+
+type filter struct {
+	Observable
+	Observer
+}
+
+// NewFilter constructs a Filter from an observable and an observer.
+func NewFilter(o Observable, oer Observer) Filter {
+	return filter{Observable: o, Observer: oer}
+}
+
 // Emitter lets you send events
 type Emitter interface {
 	Emit(context.Context, Event)
@@ -117,4 +133,28 @@ func (e simpleEvent) String() string {
 
 func (e simpleEvent) Context() context.Context {
 	return context.Background()
+}
+
+type mapFilter struct {
+	o  Observable
+	em Emitter
+
+	f func(context.Context, Emitter, Event)
+}
+
+func Map(f func(context.Context, Emitter, Event)) Filter {
+	em, o := Pair()
+	return &mapFilter{
+		o:  o,
+		em: em,
+		f:  f,
+	}
+}
+
+func (m *mapFilter) OnEvent(ctx context.Context, e Event) {
+	m.f(ctx, m.em, e)
+}
+
+func (m *mapFilter) Register(ctx context.Context, oer Observer) {
+	m.o.Register(ctx, oer)
 }

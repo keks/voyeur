@@ -24,7 +24,7 @@ import (
 )
 
 // printObserver simply prints all received events to stdout
-type printObserver struct {}
+type printObserver struct{}
 
 func (o printObserver) OnEvent(ctx context.Context, e Event) {
 	fmt.Println(e)
@@ -50,27 +50,50 @@ func Example() {
 	// create and register a very simple observer. It just prints events to stdout.
 	printer := printObserver{}
 	o.Register(ctx, printer)
-	
+
 	// emit some events.
 	em.Emit(ctx, stringEvent("test"))
 	em.Emit(ctx, stringEvent("foo"))
-	
+
 	// cancel the observation. This only affects observers that use the context returned by context.WithCancel(ctx)
 	cancel()
 	time.Sleep(time.Millisecond) // kick scheduler, otherwise the observer will not be removed before we emit the next event
-	
+
 	// this event is not seen by the observer anymore, because we cancelled the observation before.
 	em.Emit(ctx, stringEvent("bar"))
-	
+
 	// let's reregister, this time without being able to cancel
 	ctx = context.Background()
 	o.Register(ctx, printer)
-	
+
 	em.End(ctx)
-	
+
 	// Output:
 	// test
 	// foo
 	// End
 }
 
+func ExampleFilter() {
+	var strEv stringEvent
+	ctx := context.Background()
+
+	m := Map(func(ctx context.Context, em Emitter, e Event) {
+		strEv += e.(stringEvent)
+		em.Emit(ctx, strEv)
+	})
+
+	em, o := Pair()
+
+	o.Register(ctx, m)
+	m.Register(ctx, printObserver{})
+
+	em.Emit(ctx, stringEvent("a"))
+	em.Emit(ctx, stringEvent("b"))
+	em.Emit(ctx, stringEvent("c"))
+
+	// Output:
+	// a
+	// ab
+	// abc
+}
