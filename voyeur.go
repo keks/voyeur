@@ -83,7 +83,7 @@ type Emitter interface {
 type observable struct {
 	done      chan struct{}
 	lock      sync.Mutex
-	observers map[Observer]struct{}
+	observers map[*Observer]struct{}
 }
 
 type emitter observable
@@ -92,7 +92,7 @@ func (o *observable) Register(ctx context.Context, oer Observer) {
 	func() {
 		o.lock.Lock()
 		defer o.lock.Unlock()
-		o.observers[oer] = struct{}{}
+		o.observers[&oer] = struct{}{}
 	}()
 	go func() {
 		select {
@@ -100,7 +100,7 @@ func (o *observable) Register(ctx context.Context, oer Observer) {
 		case <-ctx.Done():
 			o.lock.Lock()
 			defer o.lock.Unlock()
-			delete(o.observers, oer)
+			delete(o.observers, &oer)
 		}
 	}()
 }
@@ -110,7 +110,7 @@ func (em *emitter) Emit(ctx context.Context, e Event) {
 	defer em.lock.Unlock()
 
 	for o := range em.observers {
-		o.OnEvent(ctx, e)
+		(*o).OnEvent(ctx, e)
 	}
 
 	if e == End {
@@ -126,7 +126,7 @@ func (em *emitter) End(ctx context.Context) {
 func Pair() (Emitter, Observable) {
 	o := &observable{
 		done:      make(chan struct{}),
-		observers: make(map[Observer]struct{}),
+		observers: make(map[*Observer]struct{}),
 	}
 
 	em := (*emitter)(o)
