@@ -97,3 +97,46 @@ func ExampleFilter() {
 	// ab
 	// abc
 }
+
+func ExampleFilterBuilder() {
+	fb := NewFilterBuilder(
+		func(l int) Filter {
+			return Map(func(ctx context.Context, em Emitter, e Event) {
+				if se, ok := e.(stringEvent); ok && len(se) == l {
+					em.Emit(ctx, e)
+				}
+			})
+		})
+
+	// only forward events of length 4
+	m, err := fb.Build(4)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	ctx := context.Background()
+
+	em, o := Pair()
+
+	o.Register(ctx, m)
+	m.Register(ctx, printObserver{})
+
+	em.Emit(ctx, stringEvent("1"))
+	em.Emit(ctx, stringEvent("12"))
+	em.Emit(ctx, stringEvent("123"))
+	em.Emit(ctx, stringEvent("1234"))
+	em.Emit(ctx, stringEvent("12345"))
+	em.Emit(ctx, stringEvent("123456"))
+
+	em.Emit(ctx, stringEvent("a"))
+	em.Emit(ctx, stringEvent("ab"))
+	em.Emit(ctx, stringEvent("abc"))
+	em.Emit(ctx, stringEvent("abcd"))
+	em.Emit(ctx, stringEvent("abcde"))
+	em.Emit(ctx, stringEvent("abcdef"))
+
+	// Output:
+	// 1234
+	// abcd
+}

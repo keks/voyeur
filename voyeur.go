@@ -19,6 +19,9 @@ package voyeur
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -56,6 +59,92 @@ func (o ObserverFunc) OnEvent(ctx context.Context, e Event) {
 // Observable  emits events
 type Observable interface {
 	Register(context.Context, Observer)
+}
+
+// FilterBuilder is a function taking an arbitrary number of inputs and returns a Filter
+type FilterBuilder struct {
+	v interface{}
+}
+
+func NewFilterBuilder(f interface{}) *FilterBuilder {
+	return &FilterBuilder{f}
+}
+
+// Valid returns whether FilterBuilder is a valid FilterBuilder
+func (fb *FilterBuilder) Valid() bool {
+	t := reflect.TypeOf(fb.v)
+	if t.Kind() != reflect.Func {
+		return false
+	}
+
+	if t.NumOut() != 1 {
+		return false
+	}
+
+	if t.Out(0) != reflect.TypeOf(Filter(nil)) {
+		return false
+	}
+
+	return true
+}
+
+type paramMismatchError struct {
+	t  reflect.Type
+	vs []interface{}
+}
+
+func newParamMismatchError(t reflect.Type, vs interface{}) error {
+	return paramMismatchError{
+		t:  t,
+		vs: vs.([]interface{}),
+	}
+}
+
+func (err paramMismatchError) Error() string {
+	gotTypeStrs := make([]string, len(err.vs))
+	expTypeStrs := make([]string, err.t.NumIn())
+
+	for i, v := range err.vs {
+		t := reflect.TypeOf(v)
+		gotTypeStrs[i] = fmt.Sprintf("%s.%s", t.PkgPath(), t.Name())
+	}
+
+	for i := 0; i < err.t.NumIn(); i++ {
+		t := err.t.In(i)
+		gotTypeStrs[i] = fmt.Sprintf("%s.%s", t.PkgPath(), t.Name())
+	}
+
+	return fmt.Sprintf("parameter mismatch error: got (%s), expected (%s)", strings.Join(gotTypeStrs, " "), strings.Join(expTypeStrs, " "))
+}
+
+func (fb *FilterBuilder) Build(vs ...interface{}) (Filter, error) {
+	t := reflect.TypeOf(fb.v)
+
+	if len(vs) != t.NumIn() {
+		return nil, newParamMismatchError(t, vs)
+	}
+
+	for i := range vs {
+		tv := reflect.TypeOf(vs[i])
+		tp := t.In(i)
+		if tv != tp {
+			return nil, newParamMismatchError(t, vs)
+		}
+	}
+
+	var rvs = make([]reflect.Value, len(vs))
+
+	for i, v := range vs {
+		rvs[i] = reflect.ValueOf(v)
+	}
+
+	// spread this over several lines, because each of these may, but shouldn't panic.
+	// the resulting stack trace will be more informative/easier to read.
+	out := reflect.ValueOf(fb.v).Call(rvs)
+	filterValue := out[0]
+	filterIface := filterValue.Interface()
+
+	return filterIface.(Filter), nil
 }
 
 // Filter is bot observer and observant. A generalization of map, filter and reduce.
