@@ -22,6 +22,13 @@ import (
 	"sync"
 )
 
+func init() {
+	Noop = Map(func(ctx context.Context, em Emitter, e Event) {})
+	Fwd = Map(func(ctx context.Context, em Emitter, e Event) { em.Emit(ctx, e) })
+}
+
+var Noop, Fwd Filter
+
 // End is like EOF or a channel close. Nothing to see here anymore.
 var End = simpleEvent{"End"}
 
